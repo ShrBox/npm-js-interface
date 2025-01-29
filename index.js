@@ -24,15 +24,19 @@ function splitLine(line) {
 }
 
 module.exports = async (cmdLine) => {
+    const ExitHandler = require('../npm/lib/cli/exit-handler.js')
+    const exitHandler = new ExitHandler({ process })
     const Npm = require('../npm/lib/npm.js')
     const npm = new Npm()
+    exitHandler.setNpm(npm)
+    exitHandler.registerUncaughtHandlers()
 
     try {
         await npm.load()
 
         if (cmdLine.length == 0) {
             console.log(npm.usage)
-            return false
+            return exitHandler.exit()
         }
 
         const args = splitLine(cmdLine)
@@ -42,18 +46,20 @@ module.exports = async (cmdLine) => {
         const cmd = args.shift()
         if (!cmd) {
             console.log(`Unknown command: "${cmd}"\nTo see a list of supported npm commands, run:\n  npm help`)
-            return false
+            return exitHandler.exit()
         }
 
-        await npm.exec(cmd, args)
+        const execPromise = npm.exec(cmd, args)
+
+        await execPromise
+        return exitHandler.exit()
     }
     catch (err) {
         if (err.code === 'EUNKNOWNCOMMAND') {
             console.log(`Bad command.\nTo see a list of supported npm commands, run:\n  npm help`)
-            return false
+            return exitHandler.exit(err)
         }
         console.log(`Error when executing npm command. ${err.message}\n\n${err.stack}\n`)
-        return false
+        return exitHandler.exit(err)
     }
-    return true
 }
